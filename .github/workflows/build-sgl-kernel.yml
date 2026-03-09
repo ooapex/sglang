@@ -1,0 +1,53 @@
+name: Build sgl-kernel for Hopper
+
+on:
+  workflow_dispatch:  # 手动触发
+    inputs:
+      cuda_version:
+        description: 'CUDA version'
+        default: '12.6'
+        type: choice
+        options: ['12.4', '12.6', '12.8', '12.9']
+      python_version:
+        description: 'Python version'
+        default: '3.10'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free disk space  # GitHub runner 磁盘有限
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          sudo docker image prune -a -f
+          df -h
+
+      - name: Build sgl-kernel wheel
+        run: |
+          cd sgl-kernel
+          chmod +x ./build.sh
+          ./build.sh "${{ inputs.python_version }}" "${{ inputs.cuda_version }}"
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sgl-kernel-cu${{ inputs.cuda_version }}-py${{ inputs.python_version }}
+          path: sgl-kernel/dist/*.whl
+          retention-days: 90
+
+      - name: Build sglang wheel  # 纯 Python 包，顺便打一下
+        run: |
+          pip install build
+          cd python
+          python -m build --wheel
+          
+      - name: Upload sglang wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: sglang-py${{ inputs.python_version }}
+          path: python/dist/*.whl
+          retention-days: 90
